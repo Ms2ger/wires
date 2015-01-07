@@ -49,6 +49,8 @@ impl WebDriverError {
     }
 
     pub fn status_code(&self) -> &str {
+    // This expands to status_code<'a>(&'a self) -> &'a str; consider
+    // status_code(&self) -> &'static str.
         match self.status {
             ErrorStatus::ElementNotSelectable => "element not selectable",
             ErrorStatus::ElementNotVisible => "element not visible",
@@ -121,7 +123,7 @@ impl FromError<ParserError> for WebDriverError {
 }
 
 #[deriving(PartialEq, Clone, Show)]
-pub enum Nullable<T: ToJson> {
+pub enum Nullable<T: ToJson> { // Curious.
     Value(T),
     Null
 }
@@ -195,6 +197,17 @@ impl WebElement {
                     "Could not find webelement key").as_string(),
                 ErrorStatus::InvalidArgument,
                 "Could not convert web element to string").into_string()))
+        // Not very readable...
+        let object = try_opt!(data.as_object(),
+                              ErrorStatus::InvalidArgument,
+                              "Could not convert webelement to object");
+        let key_value = try_opt!(object.get("element-6066-11e4-a52e-4f735466cecf"),
+                                 ErrorStatus::InvalidArgument,
+                                 "Could not find webelement key");
+        let key = try_opt!(key_value.as_string(),
+                           ErrorStatus::InvalidArgument,
+                           "Could not convert web element to string").into_string();
+        Ok(WebElement::new(key))
     }
 }
 
@@ -202,6 +215,7 @@ impl ToJson for WebElement {
     fn to_json(&self) -> json::Json {
         let mut data = TreeMap::new();
         data.insert("element-6066-11e4-a52e-4f735466cecf".to_string(), self.id.to_json());
+                    // ^ constant!
         json::Object(data)
     }
 }
@@ -216,12 +230,19 @@ pub enum FrameId {
 impl FrameId {
     pub fn from_json(data: &json::Json) -> WebDriverResult<FrameId> {
       match data {
+          // indentation
             &json::Json::U64(x) => {
                 if x <= u16::MAX as u64 {
                     Ok(FrameId::Short(x as u16))
                 } else {
                     Err(WebDriverError::new(ErrorStatus::NoSuchFrame,
                                             "frame id out of range"))
+                }
+                // Or... use std::num::ToPrimitive;
+                match x.to_u16() {
+                    Some(x) => Ok(FrameId::Short(x)),
+                    None => Err(WebDriverError::new(ErrorStatus::NoSuchFrame,
+                                                    "frame id out of range")),
                 }
             },
           &json::Json::Null => Ok(FrameId::Null),
