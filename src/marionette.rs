@@ -47,7 +47,7 @@ impl MarionetteSession {
         let x = try!(msg.to_marionette());
         let mut data = try_opt!(x.as_object(),
                                 ErrorStatus::UnknownError,
-                                "Message was not a JSON Object").clone();
+                                "Message was not a JSON Object").clone(); // Why clone()?
         data.insert("to".to_string(), self.to.to_json());
         Ok(Json::Object(data))
     }
@@ -70,12 +70,21 @@ impl MarionetteSession {
 
     pub fn response_from_json(&mut self, message: &WebDriverMessage,
                               data: &str) -> WebDriverResult<Option<WebDriverResponse>> {
+                                                             // Do you ever return None?
         let json_data = try!(object_from_json(data));
         if json_data.contains_key(&"error".to_string()) {
             //TODO: convert the marionette error into the right webdriver error
             let error = try_opt!(json_data.get("error").unwrap().as_object(),
                                  ErrorStatus::UnknownError,
                                  "Marionette error field was not an object");
+
+        // Or...
+        if let Some(error) = json_data.get("error") {
+            let error = try_opt!(error.as_object(),
+                                 ErrorStatus::UnknownError,
+                                 "Marionette error field was not an object");
+
+
             let status_code = try_opt!(
                 try_opt!(error.get("status"),
                          ErrorStatus::UnknownError,
@@ -94,6 +103,7 @@ impl MarionetteSession {
         try!(self.update(message, &json_data));
 
         match message.command {
+        // Perhaps Ok(Some(match message.command { ... }))
             //Everything that doesn't have a response value
             Get(_) | GoBack | GoForward | Refresh | Close | SetTimeouts(_) |
             SetWindowSize(_) | MaximizeWindow | SwitchToWindow(_) | SwitchToFrame(_) |
@@ -292,6 +302,7 @@ impl MarionetteSession {
             34 => ErrorStatus::MoveTargetOutOfBounds,
             405 => ErrorStatus::UnsupportedOperation,
             13 | 19 | 51 | 52 | 53 | 54 | 55 | 56 | 500 | _ => ErrorStatus::UnknownError
+            // ^ why list those?
 
         }
     }
@@ -323,6 +334,7 @@ impl MarionetteConnection {
                     Ok(x) => x,
                     Err(_) => panic!("Failed to connect to marionette")
                 };
+                // ok().expect("Failed to connect to marionette")?
                 match json_data.get(&"id".to_string()) {
                     Some(x) => match x.as_string() {
                         Some(id) => self.session.to = id.to_string(),
@@ -338,11 +350,12 @@ impl MarionetteConnection {
 
     fn encode_msg(&self, msg:&Json) -> String {
         let data = json::encode(msg);
-        let len = data.len().to_string();
+        /*let len = data.len().to_string();
         let mut message = len;
         message.push_str(":");
         message.push_str(data.as_slice());
-        message
+        message*/
+        format!("{}:{}", data.len(), data)
     }
 
     pub fn send_message(&mut self, msg: &WebDriverMessage) -> WebDriverResult<Option<WebDriverResponse>>  {
@@ -352,6 +365,9 @@ impl MarionetteConnection {
             Err(x) => Err(x)
         };
         resp
+        // Or
+        let resp_data = try!(match self.send(&resp));
+        self.session.response_from_json(msg, resp_data[])
     }
 
     fn send(&mut self, msg: &Json) -> WebDriverResult<String> {
@@ -376,6 +392,7 @@ impl MarionetteConnection {
 
     fn read_resp(&mut self) -> Result<String, IoError> {
         let mut bytes = 0 as uint;
+        // 0 as uint -> 0u
         loop {
             let byte = try!(self.stream.read_byte()) as char;
             match byte {
