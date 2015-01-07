@@ -36,22 +36,27 @@ static DEFAULT_ADDR: &'static str = "127.0.0.1:4444";
 static VERSION: &'static str = include_str!("../.version");
 
 fn err(msg: String) {
-    let prog = os::args()[0].clone();
+    let prog = os::args()[0].clone(); // shouldn't need to clone()
     io::stderr().write_line(format!("{}: error: {}", prog, msg).as_slice()).unwrap();
 }
 
 fn print_usage(opts: &[OptGroup]) {
-    let prog = os::args()[0].clone();
+    let prog = os::args()[0].clone(); // shouldn't need to clone()
     let shorts: Vec<_> = opts.iter().map(|opt| opt.short_name.clone()).collect();
+    // Could be (I think):
+    // let shorts: String = opts.iter().map(|opt| &*opt.short_name).collect();
     let msg = format!("usage: {} [-{}] [ADDRESS]", prog, shorts.as_slice().concat());
     io::stderr().write_line(usage(msg.as_slice(), opts).as_slice()).unwrap();
+    // Prefer &*msg over msg.as_slice()
 }
 
 // Valid addresses to parse are "HOST:PORT" or ":PORT".
 // If the host isn't specified, 127.0.0.1 will be assumed.
 fn parse_addr(s: String) -> Result<SocketAddr, String> {
+// Take &str rather than String
     let mut parts: Vec<&str> = s.as_slice().splitn(1, ':').collect();
     if parts.len() == 2 {
+        // "If the host isn't specified"?
         parts[0] = "127.0.0.1";
     }
     let full_addr = parts.connect(":");
@@ -62,6 +67,7 @@ fn parse_addr(s: String) -> Result<SocketAddr, String> {
 }
 
 fn run(args: Vec<String>) -> int {
+// -> Result<(), ()> would be more idiomatic, I think
     let opts = [
         optflag("q", "", "make the program quiet, only printing warnings"),
         optflag("v", "", "show version information"),
@@ -92,6 +98,18 @@ fn run(args: Vec<String>) -> int {
     } else {
         DEFAULT_ADDR.to_string()
     };
+
+    // Perhaps:
+    let addr_str = match &*matches.free {
+        [] => DEFAULT_ADDR.to_string(),
+        [m] => m.clone(),
+        _ => {
+            err(format!("got {} positional arguments, expected 1", matches.free.len()));
+            print_usage(&opts);
+            return 1;
+        }
+    };
+
     let addr = match parse_addr(addr_str) {
         Ok(x) => x,
         Err(e) => {
